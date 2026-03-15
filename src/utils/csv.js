@@ -17,7 +17,7 @@ export const HEADERS = [
 
 // Indonesian display names used as column headers in CSV / Google Sheets
 export const HEADER_LABELS = {
-  id:               'id',
+  id:               'ID Anggota',
   fullName:         'Nama Lengkap',
   birthdate:        'Tanggal Lahir',
   gender:           'Jenis Kelamin',
