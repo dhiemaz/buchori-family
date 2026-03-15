@@ -11,7 +11,7 @@ export default function WelcomeScreen({ onEnter }) {
       <div className="welcome-card">
         <div className="welcome-tree-icon">🌳</div>
 
-        <h1 className="welcome-title">Keluarga Besar<br />Buchori.</h1>
+        <h1 className="welcome-title">Keluarga Besar<br />H. Buchori</h1>
 
         <p className="welcome-tagline">
           Merangkai kisah, menjaga kenangan,<br />
