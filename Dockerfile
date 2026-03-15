@@ -9,6 +9,7 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx-global.conf /etc/nginx/nginx.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80 8787
 CMD ["nginx", "-g", "daemon off;"]
