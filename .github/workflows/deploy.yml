@@ -52,12 +52,17 @@ jobs:
     needs: build-and-push
 
     steps:
+      - name: Decode SSH key
+        run: |
+          echo "${{ secrets.DO_SSH_KEY }}" | base64 -d > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+
       - name: Deploy on Droplet via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DO_HOST }}
           username: ${{ secrets.DO_USERNAME }}
-          key: ${{ secrets.DO_SSH_KEY }}
+          key_path: /tmp/deploy_key
           script: |
             echo ${{ secrets.DO_GHCR_PAT }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker pull ghcr.io/${{ github.repository }}:latest
