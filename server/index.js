@@ -39,15 +39,42 @@ app.put('/api/members', (req, res) => {
 
 // ── Google Sheets proxy (server-side fetch: no CORS, no JSONP, no URL limits) ─
 
+const GS_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (compatible; BuchoriFamily/1.0)',
+  'Accept': 'application/json, text/plain, */*',
+}
+
+function makeAbortSignal(ms = 30_000) {
+  const ac = new AbortController()
+  setTimeout(() => ac.abort(), ms)
+  return ac.signal
+}
+
+async function parseGoogleResponse(r) {
+  const text = await r.text()
+  try {
+    return JSON.parse(text)
+  } catch {
+    // Google returned HTML (login redirect, quota error, etc.) instead of JSON
+    const preview = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300)
+    throw new Error(`Google script returned non-JSON (HTTP ${r.status}): ${preview}`)
+  }
+}
+
 // GET /api/sheets?url=<scriptUrl>&action=pull|status
 app.get('/api/sheets', async (req, res) => {
   const { url, action = 'status' } = req.query
   if (!url) return res.status(400).json({ ok: false, error: 'url param required' })
   try {
-    const r = await fetch(`${url}?action=${encodeURIComponent(action)}`)
-    const json = await r.json()
+    const r = await fetch(`${url}?action=${action}`, {
+      headers: GS_HEADERS,
+      redirect: 'follow',
+      signal: makeAbortSignal(),
+    })
+    const json = await parseGoogleResponse(r)
     res.json(json)
   } catch (err) {
+    console.error('[sheets GET]', err.message)
     res.status(502).json({ ok: false, error: err.message })
   }
 })
@@ -59,12 +86,15 @@ app.post('/api/sheets/push', async (req, res) => {
   try {
     const r = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...GS_HEADERS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'push', data }),
+      redirect: 'follow',
+      signal: makeAbortSignal(),
     })
-    const json = await r.json()
+    const json = await parseGoogleResponse(r)
     res.json(json)
   } catch (err) {
+    console.error('[sheets POST]', err.message)
     res.status(502).json({ ok: false, error: err.message })
   }
 })
