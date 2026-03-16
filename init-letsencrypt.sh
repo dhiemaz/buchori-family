@@ -28,7 +28,16 @@ docker compose up -d proxy
 echo "### Waiting for nginx to be ready..."
 sleep 3
 
-# ── 2. Request the real certificate ──────────────────────────────────────────
+# ── 2. Clear any dummy/stale cert that would block certbot ───────────────────
+# The proxy entrypoint creates a self-signed cert so nginx can start.
+# Certbot doesn't know about it and refuses to overwrite the "live" directory.
+echo "### Removing temporary self-signed certificate..."
+docker compose run --rm --entrypoint sh certbot -c \
+  "rm -rf /etc/letsencrypt/live/${DOMAIN} \
+          /etc/letsencrypt/archive/${DOMAIN} \
+          /etc/letsencrypt/renewal/${DOMAIN}.conf"
+
+# ── 3. Request the real certificate ──────────────────────────────────────────
 # --entrypoint certbot overrides the renewal-loop entrypoint set in docker-compose.yml
 echo "### Requesting Let's Encrypt certificate for ${DOMAIN} and www.${DOMAIN}..."
 docker compose run --rm --entrypoint certbot certbot certonly \
@@ -42,11 +51,11 @@ docker compose run --rm --entrypoint certbot certbot certonly \
   --no-eff-email \
   --force-renewal
 
-# ── 3. Reload nginx so it picks up the real cert ─────────────────────────────
+# ── 4. Reload nginx so it picks up the real cert ─────────────────────────────
 echo "### Reloading nginx..."
 docker compose exec proxy nginx -s reload
 
-# ── 4. Start / restart the certbot renewal service ───────────────────────────
+# ── 5. Start / restart the certbot renewal service ───────────────────────────
 echo "### Starting certbot renewal service..."
 docker compose up -d certbot
 
