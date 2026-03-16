@@ -1207,6 +1207,26 @@ input, select, textarea { font-family: inherit; }
 /* ============================================================
    MOBILE OVERRIDES
    ============================================================ */
+
+/* Lock the entire page to the viewport height on mobile.
+   Without this, tc-outer's min-height pushes content taller than
+   the screen, making the page scrollable. When the user pans the
+   tree the page scrolls too, taking tc-outer off-screen (blank white). */
+@media (max-width: 768px) {
+  html, body {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none; /* kill iOS rubber-band scroll */
+  }
+  .app {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .tc-outer {
+    min-height: 0; /* let flex give it whatever space remains */
+  }
+}
+
 @media (max-width: 479px) {
   .header-title   { font-size: 1.15rem; }
   .btn            { padding: 9px 14px; font-size: 0.85rem; }
