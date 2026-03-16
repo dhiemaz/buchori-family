@@ -152,14 +152,38 @@ export default function TreeCanvas({ children }) {
     inner.style.transform = 'translate(0px, 0px) scale(1)'
     await new Promise(r => requestAnimationFrame(r))
 
+    // html2canvas ignores object-fit: cover, so photos appear stretched/blurry.
+    // Fix: replace each avatar <img> with a pre-cropped canvas data URL, then restore.
+    const swapped = []
+    inner.querySelectorAll('.card-avatar-img').forEach(img => {
+      if (!img.complete || !img.naturalWidth) return
+      const size = img.offsetWidth * 2          // 2× CSS size for sharpness
+      const offscreen = document.createElement('canvas')
+      offscreen.width  = size
+      offscreen.height = size
+      const ctx = offscreen.getContext('2d')
+      // Replicate object-fit: cover (center-crop)
+      const nw = img.naturalWidth, nh = img.naturalHeight
+      const scale = Math.max(size / nw, size / nh)
+      const dw = nw * scale, dh = nh * scale
+      ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh)
+      swapped.push({ img, src: img.src })
+      img.src = offscreen.toDataURL('image/jpeg', 0.95)
+    })
+    // Let browser decode the new src values before capture
+    if (swapped.length) await new Promise(r => requestAnimationFrame(r))
+
     const canvas = await html2canvas(inner, {
       backgroundColor: '#fdf8f3',
       scale: 2,
       useCORS: true,
+      allowTaint: true,
+      imageTimeout: 0,
       logging: false,
     })
 
-    // Restore transform
+    // Restore original image srcs and transform
+    swapped.forEach(({ img, src }) => { img.src = src })
     inner.style.transform = `translate(${prev.x}px, ${prev.y}px) scale(${prev.scale})`
 
     const link = document.createElement('a')
