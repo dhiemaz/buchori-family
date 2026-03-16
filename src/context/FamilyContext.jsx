@@ -22,7 +22,7 @@ export function FamilyProvider({ children }) {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const saveTimer = useRef(null)
-  const initialized = useRef(false)
+  const skipNextSave = useRef(true) // skip saving the initial API load back
 
   const [modal, setModal] = useState({
     open: false,
@@ -35,13 +35,20 @@ export function FamilyProvider({ children }) {
   // Load from API on mount
   useEffect(() => {
     apiGet()
-      .then(data => { setMembers(data); setLoading(false); initialized.current = true })
+      .then(data => {
+        skipNextSave.current = true // don't write the loaded data straight back
+        setMembers(data)
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [])
 
   // Save to API whenever members change (debounced 500 ms)
   useEffect(() => {
-    if (!initialized.current) return
+    if (skipNextSave.current) {
+      skipNextSave.current = false
+      return
+    }
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       apiPut(members).catch(err => console.error('Failed to save:', err))
