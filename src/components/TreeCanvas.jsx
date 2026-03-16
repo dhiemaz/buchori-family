@@ -4,93 +4,109 @@ import html2canvas from 'html2canvas'
 const MIN_SCALE = 0.12
 const MAX_SCALE = 3
 const STEP = 0.12
+const INITIAL = { x: 60, y: 50, scale: 1 }
 
 export default function TreeCanvas({ children }) {
-  const [transform, setTransform] = useState({ x: 60, y: 50, scale: 1 })
-  const [dragging, setDragging] = useState(false)
-  const [showHint, setShowHint] = useState(true)
+  // displayScale is the ONLY React state for the transform — used solely for
+  // the zoom-% label. The actual CSS transform is written directly to the DOM
+  // via applyTransform() so that every touchmove frame is applied instantly
+  // without triggering a React re-render, which caused blank-white flashes on
+  // real mobile devices.
+  const [displayScale, setDisplayScale] = useState(INITIAL.scale)
+  const [dragging,     setDragging]     = useState(false)
+  const [showHint,     setShowHint]     = useState(true)
 
-  const containerRef = useRef(null)
-  const innerRef = useRef(null)
-  const transformRef = useRef(transform)
-  const dragOrigin = useRef(null)
+  const containerRef  = useRef(null)
+  const innerRef      = useRef(null)
+  const tRef          = useRef({ ...INITIAL })  // live source of truth (no stale-closure risk)
+  const dragOrigin    = useRef(null)
   const lastPinchDist = useRef(null)
-  const hintTimer = useRef(null)
+  const hintTimer     = useRef(null)
 
-  // Keep ref in sync so event handlers always see the latest transform
-  useEffect(() => { transformRef.current = transform }, [transform])
+  // Write transform directly to the DOM element — zero React re-render.
+  const applyTransform = useCallback((t) => {
+    tRef.current = t
+    if (innerRef.current) {
+      innerRef.current.style.transform =
+        `translate(${t.x}px, ${t.y}px) scale(${t.scale})`
+    }
+  }, [])
 
-  // Hide hint after 4 s
+  // Apply initial transform on mount.
+  useEffect(() => { applyTransform(INITIAL) }, [applyTransform])
+
+  // Hide hint after 4 s.
   useEffect(() => {
     hintTimer.current = setTimeout(() => setShowHint(false), 4000)
     return () => clearTimeout(hintTimer.current)
   }, [])
 
-  // Zoom toward point (cx, cy) in container coordinates
-  const zoomAt = useCallback((cx, cy, delta) => {
-    setTransform(prev => {
-      const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, prev.scale + delta))
-      const ratio = newScale / prev.scale
-      return {
-        scale: newScale,
-        x: cx - ratio * (cx - prev.x),
-        y: cy - ratio * (cy - prev.y),
-      }
-    })
-  }, [])
+  // Zoom toward point (cx, cy) in container coordinates.
+  // syncState=true → also update the zoom-% label (for non-touch interactions).
+  const zoomAt = useCallback((cx, cy, delta, syncState = false) => {
+    const prev     = tRef.current
+    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, prev.scale + delta))
+    const ratio    = newScale / prev.scale
+    const t = {
+      scale: newScale,
+      x: cx - ratio * (cx - prev.x),
+      y: cy - ratio * (cy - prev.y),
+    }
+    applyTransform(t)
+    if (syncState) setDisplayScale(newScale)
+  }, [applyTransform])
 
-  // Mouse wheel zoom
+  // Mouse-wheel zoom.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const handler = (e) => {
       e.preventDefault()
       const rect = el.getBoundingClientRect()
-      zoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY > 0 ? -STEP : STEP)
+      zoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY > 0 ? -STEP : STEP, true)
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
   }, [zoomAt])
 
-  // Mouse drag
+  // Mouse drag.
   function handleMouseDown(e) {
     if (e.button !== 0) return
     e.preventDefault()
     setDragging(true)
     dragOrigin.current = {
       mx: e.clientX, my: e.clientY,
-      tx: transformRef.current.x, ty: transformRef.current.y,
+      tx: tRef.current.x, ty: tRef.current.y,
     }
   }
   function handleMouseMove(e) {
     if (!dragging || !dragOrigin.current) return
-    setTransform(prev => ({
-      ...prev,
+    applyTransform({
+      ...tRef.current,
       x: dragOrigin.current.tx + (e.clientX - dragOrigin.current.mx),
       y: dragOrigin.current.ty + (e.clientY - dragOrigin.current.my),
-    }))
+    })
   }
   function stopDrag() { setDragging(false); dragOrigin.current = null }
 
-  // Touch drag + pinch zoom — registered via addEventListener so we can use
-  // { passive: false } on touchmove, which lets e.preventDefault() actually work.
-  // React 17+ attaches synthetic touch listeners passively at the root, making
-  // e.preventDefault() a no-op and allowing the browser to scroll the page.
+  // Touch drag + pinch zoom — registered via addEventListener (not React props)
+  // so we can pass { passive: false } on touchstart/touchmove and call
+  // e.preventDefault() to stop any browser scroll gesture.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
 
     function onTouchStart(e) {
       setShowHint(false)
-      // Prevent the browser from committing to a page-scroll gesture at touchstart.
-      // Skip interactive elements so button/link taps still produce click events.
+      // Prevent the browser from committing to a scroll gesture at touchstart.
+      // Skip interactive elements so taps still produce click events.
       if (!e.target.closest('button, a, input, select, textarea')) {
         e.preventDefault()
       }
       if (e.touches.length === 1) {
         dragOrigin.current = {
           mx: e.touches[0].clientX, my: e.touches[0].clientY,
-          tx: transformRef.current.x, ty: transformRef.current.y,
+          tx: tRef.current.x,       ty: tRef.current.y,
         }
       }
       if (e.touches.length === 2) {
@@ -102,77 +118,84 @@ export default function TreeCanvas({ children }) {
     }
 
     function onTouchMove(e) {
-      e.preventDefault() // works because listener is { passive: false }
+      e.preventDefault()  // works because listener is { passive: false }
+
       if (e.touches.length === 1 && dragOrigin.current) {
-        setTransform(prev => ({
-          ...prev,
+        // Direct DOM write — ZERO React re-renders during drag.
+        applyTransform({
+          ...tRef.current,
           x: dragOrigin.current.tx + (e.touches[0].clientX - dragOrigin.current.mx),
           y: dragOrigin.current.ty + (e.touches[0].clientY - dragOrigin.current.my),
-        }))
+        })
       }
+
       if (e.touches.length === 2 && lastPinchDist.current !== null) {
-        const dx = e.touches[0].clientX - e.touches[1].clientX
-        const dy = e.touches[0].clientY - e.touches[1].clientY
+        const dx   = e.touches[0].clientX - e.touches[1].clientX
+        const dy   = e.touches[0].clientY - e.touches[1].clientY
         const dist = Math.hypot(dx, dy)
         const rect = el.getBoundingClientRect()
-        const cx = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left
-        const cy = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top
+        const cx   = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left
+        const cy   = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top
         zoomAt(cx, cy, (dist - lastPinchDist.current) * 0.007)
         lastPinchDist.current = dist
       }
     }
 
-    function onTouchEnd() { dragOrigin.current = null; lastPinchDist.current = null }
-    // touchcancel fires when the browser takes over a touch (e.g. notification, gesture);
-    // clear state so stale dragOrigin doesn't corrupt the next touch sequence.
-    function onTouchCancel() { dragOrigin.current = null; lastPinchDist.current = null }
+    // Sync zoom-% label once per gesture (not on every frame).
+    // Also handles touchcancel (OS takes over — e.g. incoming call).
+    function onGestureEnd() {
+      setDisplayScale(tRef.current.scale)
+      dragOrigin.current    = null
+      lastPinchDist.current = null
+    }
 
-    el.addEventListener('touchstart',  onTouchStart,  { passive: false }) // non-passive → can preventDefault
+    el.addEventListener('touchstart',  onTouchStart,  { passive: false })
     el.addEventListener('touchmove',   onTouchMove,   { passive: false })
-    el.addEventListener('touchend',    onTouchEnd)
-    el.addEventListener('touchcancel', onTouchCancel)
+    el.addEventListener('touchend',    onGestureEnd)
+    el.addEventListener('touchcancel', onGestureEnd)
     return () => {
       el.removeEventListener('touchstart',  onTouchStart)
       el.removeEventListener('touchmove',   onTouchMove)
-      el.removeEventListener('touchend',    onTouchEnd)
-      el.removeEventListener('touchcancel', onTouchCancel)
+      el.removeEventListener('touchend',    onGestureEnd)
+      el.removeEventListener('touchcancel', onGestureEnd)
     }
-  }, [zoomAt])
+  }, [zoomAt, applyTransform])
 
-  // Control buttons
-  function zoomIn() {
+  // Control buttons.
+  function doZoomIn() {
     const el = containerRef.current
     if (!el) return
-    zoomAt(el.clientWidth / 2, el.clientHeight / 2, STEP)
+    zoomAt(el.clientWidth / 2, el.clientHeight / 2, STEP, true)
   }
-  function zoomOut() {
+  function doZoomOut() {
     const el = containerRef.current
     if (!el) return
-    zoomAt(el.clientWidth / 2, el.clientHeight / 2, -STEP)
+    zoomAt(el.clientWidth / 2, el.clientHeight / 2, -STEP, true)
   }
-  function resetView() { setTransform({ x: 60, y: 50, scale: 1 }) }
+  function resetView() {
+    applyTransform(INITIAL)
+    setDisplayScale(INITIAL.scale)
+  }
 
   async function exportImage() {
     const inner = innerRef.current
     if (!inner) return
 
-    const prev = transformRef.current
+    const prev = { ...tRef.current }
 
-    // Reset transform to natural size for full-resolution capture
+    // Reset to natural size for full-resolution capture.
     inner.style.transform = 'translate(0px, 0px) scale(1)'
     await new Promise(r => requestAnimationFrame(r))
 
-    // html2canvas ignores object-fit: cover, so photos appear stretched/blurry.
-    // Fix: replace each avatar <img> with a pre-cropped canvas data URL, then restore.
+    // html2canvas ignores object-fit: cover — pre-crop each avatar image.
     const swapped = []
     inner.querySelectorAll('.card-avatar-img').forEach(img => {
       if (!img.complete || !img.naturalWidth) return
-      const size = img.offsetWidth * 2          // 2× CSS size for sharpness
+      const size      = img.offsetWidth * 2
       const offscreen = document.createElement('canvas')
       offscreen.width  = size
       offscreen.height = size
       const ctx = offscreen.getContext('2d')
-      // Replicate object-fit: cover (center-crop)
       const nw = img.naturalWidth, nh = img.naturalHeight
       const scale = Math.max(size / nw, size / nh)
       const dw = nw * scale, dh = nh * scale
@@ -180,7 +203,6 @@ export default function TreeCanvas({ children }) {
       swapped.push({ img, src: img.src })
       img.src = offscreen.toDataURL('image/jpeg', 0.95)
     })
-    // Let browser decode the new src values before capture
     if (swapped.length) await new Promise(r => requestAnimationFrame(r))
 
     const canvas = await html2canvas(inner, {
@@ -192,9 +214,8 @@ export default function TreeCanvas({ children }) {
       logging: false,
     })
 
-    // Restore original image srcs and transform
     swapped.forEach(({ img, src }) => { img.src = src })
-    inner.style.transform = `translate(${prev.x}px, ${prev.y}px) scale(${prev.scale})`
+    applyTransform(prev)
 
     const link = document.createElement('a')
     link.download = `keluarga-buchori-${new Date().toISOString().slice(0, 10)}.png`
@@ -204,19 +225,21 @@ export default function TreeCanvas({ children }) {
 
   function fitView() {
     const container = containerRef.current
-    const inner = innerRef.current
+    const inner     = innerRef.current
     if (!container || !inner) return
-    const cur = transformRef.current
-    const iRect = inner.getBoundingClientRect()
-    const naturalW = iRect.width / cur.scale
+    const cur      = tRef.current
+    const iRect    = inner.getBoundingClientRect()
+    const naturalW = iRect.width  / cur.scale
     const naturalH = iRect.height / cur.scale
-    const pad = 48
-    const scaleX = (container.clientWidth - pad * 2) / naturalW
-    const scaleY = (container.clientHeight - pad * 2) / naturalH
+    const pad      = 48
+    const scaleX   = (container.clientWidth  - pad * 2) / naturalW
+    const scaleY   = (container.clientHeight - pad * 2) / naturalH
     const newScale = Math.min(scaleX, scaleY, 1.2)
-    const x = (container.clientWidth - naturalW * newScale) / 2
+    const x = (container.clientWidth  - naturalW * newScale) / 2
     const y = Math.max(pad, (container.clientHeight - naturalH * newScale) / 2)
-    setTransform({ x, y, scale: newScale })
+    const t = { x, y, scale: newScale }
+    applyTransform(t)
+    setDisplayScale(newScale)
   }
 
   return (
@@ -229,25 +252,19 @@ export default function TreeCanvas({ children }) {
       onMouseLeave={stopDrag}
       style={{ cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
     >
-      {/* Transformed content */}
-      <div
-        ref={innerRef}
-        className="tc-inner"
-        style={{
-          transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-          transformOrigin: '0 0',
-        }}
-      >
+      {/* Transform is managed entirely via applyTransform() → direct DOM write.
+          React never touches the transform style, so drag never triggers a re-render. */}
+      <div ref={innerRef} className="tc-inner">
         {children}
       </div>
 
       {/* Zoom controls */}
       <div className="tc-controls" onMouseDown={e => e.stopPropagation()}>
-        <button className="tc-btn" onClick={zoomIn} title="Zoom in">+</button>
-        <span className="tc-zoom-pct">{Math.round(transform.scale * 100)}%</span>
-        <button className="tc-btn" onClick={zoomOut} title="Zoom out">−</button>
+        <button className="tc-btn" onClick={doZoomIn}  title="Zoom in">+</button>
+        <span className="tc-zoom-pct">{Math.round(displayScale * 100)}%</span>
+        <button className="tc-btn" onClick={doZoomOut} title="Zoom out">−</button>
         <div className="tc-divider" />
-        <button className="tc-btn" onClick={fitView} title="Fit to view">⊡</button>
+        <button className="tc-btn" onClick={fitView}   title="Fit to view">⊡</button>
         <button className="tc-btn" onClick={resetView} title="Reset view">⟳</button>
         <div className="tc-divider" />
         <button className="tc-btn tc-btn-export" onClick={exportImage} title="Simpan sebagai gambar">📷</button>
