@@ -1,8 +1,4 @@
-import { useFamily } from '../context/FamilyContext'
-
 export default function Header({ onExit }) {
-  const { members, openAddRoot } = useFamily()
-
   return (
     <header className="header">
       <div className="header-left">
@@ -12,12 +8,7 @@ export default function Header({ onExit }) {
         </div>
       </div>
       <div className="header-right">
-        {members.length === 0 && (
-          <button className="btn btn-primary" onClick={openAddRoot}>
-            ✨ Begin Our Story
-          </button>
-        )}
-        <button className="btn header-exit-btn" onClick={onExit} title="Kembali ke halaman awal">
+<button className="btn header-exit-btn" onClick={onExit} title="Kembali ke halaman awal">
           ⬅ Keluar
         </button>
       </div>

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import html2canvas from 'html2canvas'
 
 const MIN_SCALE = 0.12
 const MAX_SCALE = 3
@@ -124,6 +125,32 @@ export default function TreeCanvas({ children }) {
   }
   function resetView() { setTransform({ x: 60, y: 50, scale: 1 }) }
 
+  async function exportImage() {
+    const inner = innerRef.current
+    if (!inner) return
+
+    const prev = transformRef.current
+
+    // Reset transform to natural size for full-resolution capture
+    inner.style.transform = 'translate(0px, 0px) scale(1)'
+    await new Promise(r => requestAnimationFrame(r))
+
+    const canvas = await html2canvas(inner, {
+      backgroundColor: '#fdf8f3',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    })
+
+    // Restore transform
+    inner.style.transform = `translate(${prev.x}px, ${prev.y}px) scale(${prev.scale})`
+
+    const link = document.createElement('a')
+    link.download = `keluarga-buchori-${new Date().toISOString().slice(0, 10)}.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+  }
+
   function fitView() {
     const container = containerRef.current
     const inner = innerRef.current
@@ -174,6 +201,8 @@ export default function TreeCanvas({ children }) {
         <div className="tc-divider" />
         <button className="tc-btn" onClick={fitView} title="Fit to view">⊡</button>
         <button className="tc-btn" onClick={resetView} title="Reset view">⟳</button>
+        <div className="tc-divider" />
+        <button className="tc-btn tc-btn-export" onClick={exportImage} title="Simpan sebagai gambar">📷</button>
       </div>
 
       {/* Interaction hint */}

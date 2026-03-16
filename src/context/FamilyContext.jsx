@@ -1,19 +1,28 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 const FamilyContext = createContext(null)
 
-const STORAGE_KEY = 'family-tree-data'
+async function apiGet() {
+  const res = await fetch('/api/members')
+  if (!res.ok) throw new Error('API error')
+  return res.json()
+}
+
+async function apiPut(members) {
+  const res = await fetch('/api/members', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(members),
+  })
+  if (!res.ok) throw new Error('API save error')
+}
 
 export function FamilyProvider({ children }) {
-  const [members, setMembers] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
-    }
-  })
+  const [members, setMembers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const saveTimer = useRef(null)
+  const initialized = useRef(false)
 
   const [modal, setModal] = useState({
     open: false,
@@ -23,8 +32,21 @@ export function FamilyProvider({ children }) {
     editingMember: null,  // member object when editing
   })
 
+  // Load from API on mount
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(members))
+    apiGet()
+      .then(data => { setMembers(data); setLoading(false); initialized.current = true })
+      .catch(() => setLoading(false))
+  }, [])
+
+  // Save to API whenever members change (debounced 500 ms)
+  useEffect(() => {
+    if (!initialized.current) return
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      apiPut(members).catch(err => console.error('Failed to save:', err))
+    }, 500)
+    return () => clearTimeout(saveTimer.current)
   }, [members])
 
   function openAddRoot() {
@@ -125,6 +147,7 @@ export function FamilyProvider({ children }) {
   return (
     <FamilyContext.Provider value={{
       members,
+      loading,
       modal,
       openAddRoot,
       openAddSpouse,

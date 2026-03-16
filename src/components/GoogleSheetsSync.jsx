@@ -4,11 +4,19 @@ import {
   APPS_SCRIPT_CODE,
   testConnection,
   pullFromScript,
+  pushToScript,
 } from '../utils/googleSheets'
 
 const LS_URL      = 'gs-script-url'
 const LS_SHEET_ID = 'gs-sheet-id'
 const LS_SYNC     = 'gs-last-sync'
+
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwHWk2ZspNolgsMQrjyNHOc_4_G8YUO8GTaUi9Z3a2WgD2we4L4iTvxdrfLuId4VO16/exec'
+
+// Pre-seed default URL on first visit so the app is always connected
+if (!localStorage.getItem(LS_URL)) {
+  localStorage.setItem(LS_URL, DEFAULT_SCRIPT_URL)
+}
 
 function fmtTime(iso) {
   if (!iso) return null
@@ -86,6 +94,17 @@ export default function GoogleSheetsSync() {
       setView('sync')
     } catch (e) {
       setMsg({ ok: false, text: `Connection failed: ${e.message}` })
+    } finally { setBusy('') }
+  }
+
+  async function handlePush() {
+    setBusy('push'); setMsg(null)
+    try {
+      const result = await pushToScript(scriptUrl, members)
+      stampSync()
+      setMsg({ ok: true, text: `✅ Berhasil menyimpan ${result.rows - 1} anggota ke Google Sheet.` })
+    } catch (e) {
+      setMsg({ ok: false, text: e.message })
     } finally { setBusy('') }
   }
 
@@ -305,15 +324,34 @@ export default function GoogleSheetsSync() {
                   </div>
                 </div>
 
-                {/* Sinkronisasi button */}
-                <div className="gs-sync-row">
+                {/* Push & Pull buttons */}
+                <div className="gs-action-grid">
                   <button
-                    className="btn gs-push-btn gs-sync-full-btn"
+                    className="gs-action-btn gs-action-push"
+                    onClick={handlePush}
+                    disabled={isBusy || members.length === 0}
+                  >
+                    <span className="gs-action-icon">☁️</span>
+                    <span className="gs-action-label">
+                      {busy === 'push' ? 'Menyimpan…' : 'Simpan ke Google Sheet'}
+                    </span>
+                    <span className="gs-action-sub">
+                      {busy === 'push' ? '⏳' : `${members.length} anggota → Sheet`}
+                    </span>
+                  </button>
+
+                  <button
+                    className="gs-action-btn gs-action-pull"
                     onClick={handleSync}
                     disabled={isBusy}
-                    title="Ambil data terbaru dari Google Sheet ke aplikasi"
                   >
-                    {busy === 'sync' ? '⏳ Menyinkronisasi…' : '🔄 Sinkronisasi dengan Google Sheet'}
+                    <span className="gs-action-icon">📋</span>
+                    <span className="gs-action-label">
+                      {busy === 'sync' ? 'Mengambil…' : 'Ambil dari Google Sheet'}
+                    </span>
+                    <span className="gs-action-sub">
+                      {busy === 'sync' ? '⏳' : 'Sheet → Aplikasi'}
+                    </span>
                   </button>
                 </div>
 
