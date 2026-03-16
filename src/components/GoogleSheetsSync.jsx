@@ -12,11 +12,11 @@ const LS_SHEET_ID = 'gs-sheet-id'
 const LS_SYNC     = 'gs-last-sync'
 
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwHWk2ZspNolgsMQrjyNHOc_4_G8YUO8GTaUi9Z3a2WgD2we4L4iTvxdrfLuId4VO16/exec'
+const DEFAULT_SHEET_ID   = '11LC6KuSOE-AT-Z4sB8PB_oKjOXqRoyXJ3mRbpRO7jFc'
 
-// Pre-seed default URL on first visit so the app is always connected
-if (!localStorage.getItem(LS_URL)) {
-  localStorage.setItem(LS_URL, DEFAULT_SCRIPT_URL)
-}
+// Pre-seed defaults on first visit so the app is always connected
+if (!localStorage.getItem(LS_URL))      localStorage.setItem(LS_URL,      DEFAULT_SCRIPT_URL)
+if (!localStorage.getItem(LS_SHEET_ID)) localStorage.setItem(LS_SHEET_ID, DEFAULT_SHEET_ID)
 
 function fmtTime(iso) {
   if (!iso) return null

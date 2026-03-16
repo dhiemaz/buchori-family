@@ -20,9 +20,12 @@ services:
     image: nginx:alpine
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx-global.conf:/etc/nginx/nginx.conf:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot-webroot:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
     depends_on:
       - buchori-family
       - api
@@ -32,5 +35,19 @@ services:
         hard: 65536
     restart: unless-stopped
 
+  # Certbot: obtains & auto-renews the Let's Encrypt certificate.
+  # For the *first* certificate, run init-letsencrypt.sh instead of starting
+  # this container directly.
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-webroot:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    # Check for renewal every 12 h; exits cleanly on SIGTERM
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done;'"
+    restart: unless-stopped
+
 volumes:
   sqlite-data:
+  certbot-webroot:
+  certbot-certs:

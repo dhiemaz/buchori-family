@@ -4,7 +4,7 @@ export default function Header({ onExit }) {
       <div className="header-left">
         <span className="header-icon">🌳</span>
         <div>
-          <h1 className="header-title">Keluarga Besar Buchori.</h1>
+          <h1 className="header-title">Keluarga Besar H. Buchori.</h1>
         </div>
       </div>
       <div className="header-right">
