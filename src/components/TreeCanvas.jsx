@@ -82,6 +82,11 @@ export default function TreeCanvas({ children }) {
 
     function onTouchStart(e) {
       setShowHint(false)
+      // Prevent the browser from committing to a page-scroll gesture at touchstart.
+      // Skip interactive elements so button/link taps still produce click events.
+      if (!e.target.closest('button, a, input, select, textarea')) {
+        e.preventDefault()
+      }
       if (e.touches.length === 1) {
         dragOrigin.current = {
           mx: e.touches[0].clientX, my: e.touches[0].clientY,
@@ -118,14 +123,19 @@ export default function TreeCanvas({ children }) {
     }
 
     function onTouchEnd() { dragOrigin.current = null; lastPinchDist.current = null }
+    // touchcancel fires when the browser takes over a touch (e.g. notification, gesture);
+    // clear state so stale dragOrigin doesn't corrupt the next touch sequence.
+    function onTouchCancel() { dragOrigin.current = null; lastPinchDist.current = null }
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true })
-    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
-    el.addEventListener('touchend',   onTouchEnd)
+    el.addEventListener('touchstart',  onTouchStart,  { passive: false }) // non-passive → can preventDefault
+    el.addEventListener('touchmove',   onTouchMove,   { passive: false })
+    el.addEventListener('touchend',    onTouchEnd)
+    el.addEventListener('touchcancel', onTouchCancel)
     return () => {
-      el.removeEventListener('touchstart', onTouchStart)
-      el.removeEventListener('touchmove',  onTouchMove)
-      el.removeEventListener('touchend',   onTouchEnd)
+      el.removeEventListener('touchstart',  onTouchStart)
+      el.removeEventListener('touchmove',   onTouchMove)
+      el.removeEventListener('touchend',    onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchCancel)
     }
   }, [zoomAt])
 

@@ -28,7 +28,7 @@ export default function MemberCard({ member }) {
 
   return (
     <div className={`member-card ${genderClass} ${!member.isAlive ? 'deceased' : ''}`}>
-      {!member.isAlive && <div className="deceased-ribbon">Forever Loved</div>}
+      {!member.isAlive && <div className="deceased-ribbon">Innalillahi</div>}
 
       <div className="card-header">
         {/* Avatar: photo when available, otherwise gender badge */}

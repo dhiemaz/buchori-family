@@ -275,6 +275,7 @@ input, select, textarea { font-family: inherit; }
   background-size: 22px 22px;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: none; /* tell browser: JS handles all touch gestures */
 }
 
 .tc-inner {
@@ -1208,18 +1209,24 @@ input, select, textarea { font-family: inherit; }
    MOBILE OVERRIDES
    ============================================================ */
 
-/* Lock the entire page to the viewport height on mobile.
-   Without this, tc-outer's min-height pushes content taller than
-   the screen, making the page scrollable. When the user pans the
-   tree the page scrolls too, taking tc-outer off-screen (blank white). */
+/* Lock the entire app to the viewport on mobile.
+   - position:fixed;inset:0 is the most reliable cross-browser way to prevent
+     page scroll on Chrome/Brave/Firefox/Safari — unlike overflow:hidden on body,
+     which some mobile browsers still allow scrolling through.
+   - Without this, tc-outer's min-height can push content taller than the screen,
+     making the page scrollable. Panning the tree then scrolls the page instead,
+     taking tc-outer off-screen (blank white). */
 @media (max-width: 768px) {
   html, body {
-    height: 100dvh;
     overflow: hidden;
-    overscroll-behavior: none; /* kill iOS rubber-band scroll */
+    overscroll-behavior: none;
   }
   .app {
-    height: 100dvh;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     overflow: hidden;
   }
   .tc-outer {
@@ -1542,6 +1549,12 @@ input, select, textarea { font-family: inherit; }
 .gs-dot-on { background: #2e7a50; box-shadow: 0 0 0 3px #c6ebd7; }
 
 .gs-status-label { color: #1a6e42; }
+.gs-status-link {
+  text-decoration: none;
+  border-bottom: 1px dashed #2e7a50;
+  transition: border-color 0.15s, color 0.15s;
+}
+.gs-status-link:hover { color: #0f5c30; border-bottom-color: #0f5c30; }
 
 .gs-open-link {
   font-size: 0.8rem;

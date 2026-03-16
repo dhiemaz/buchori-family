@@ -315,7 +315,15 @@ export default function GoogleSheetsSync() {
                 <div className="gs-status-bar">
                   <div className="gs-status-left">
                     <span className="gs-dot gs-dot-on" />
-                    <span className="gs-status-label">Terkoneksi dengan Google Sheet</span>
+                    <a
+                      className="gs-status-label gs-status-link"
+                      href={sheetUrl || scriptUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Buka Google Sheet"
+                    >
+                      Terkoneksi dengan Google Sheet ↗
+                    </a>
                   </div>
                   <div className="gs-status-right">
                     {sheetUrl && (
