@@ -17,7 +17,7 @@ services:
       - sqlite-data:/data
 
   proxy:
-    image: nginx:alpine
+    build: ./proxy
     ports:
       - "80:80"
       - "443:443"
@@ -25,7 +25,7 @@ services:
       - ./nginx-global.conf:/etc/nginx/nginx.conf:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - certbot-webroot:/var/www/certbot:ro
-      - certbot-certs:/etc/letsencrypt:ro
+      - certbot-certs:/etc/letsencrypt   # rw: entrypoint writes dummy cert on first boot
     depends_on:
       - buchori-family
       - api
