@@ -75,10 +75,26 @@ export default function GoogleSheetsSync() {
   }
 
   async function copyScript() {
-    await navigator.clipboard.writeText(APPS_SCRIPT_CODE)
-    setCopied(true)
-    clearTimeout(copyTimeoutRef.current)
-    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(APPS_SCRIPT_CODE)
+      } else {
+        // Fallback for HTTP (non-secure) contexts where Clipboard API is unavailable
+        const ta = document.createElement('textarea')
+        ta.value = APPS_SCRIPT_CODE
+        ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+      setCopied(true)
+      clearTimeout(copyTimeoutRef.current)
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Copy failed silently — user can manually select the code block
+    }
   }
 
   // ── Actions ────────────────────────────────────────────────────────────────

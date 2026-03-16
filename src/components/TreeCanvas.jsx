@@ -72,45 +72,62 @@ export default function TreeCanvas({ children }) {
   }
   function stopDrag() { setDragging(false); dragOrigin.current = null }
 
-  // Touch drag + pinch zoom
-  function handleTouchStart(e) {
-    setShowHint(false)
-    if (e.touches.length === 1) {
-      dragOrigin.current = {
-        mx: e.touches[0].clientX, my: e.touches[0].clientY,
-        tx: transformRef.current.x, ty: transformRef.current.y,
+  // Touch drag + pinch zoom — registered via addEventListener so we can use
+  // { passive: false } on touchmove, which lets e.preventDefault() actually work.
+  // React 17+ attaches synthetic touch listeners passively at the root, making
+  // e.preventDefault() a no-op and allowing the browser to scroll the page.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    function onTouchStart(e) {
+      setShowHint(false)
+      if (e.touches.length === 1) {
+        dragOrigin.current = {
+          mx: e.touches[0].clientX, my: e.touches[0].clientY,
+          tx: transformRef.current.x, ty: transformRef.current.y,
+        }
+      }
+      if (e.touches.length === 2) {
+        dragOrigin.current = null
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        lastPinchDist.current = Math.hypot(dx, dy)
       }
     }
-    if (e.touches.length === 2) {
-      dragOrigin.current = null
-      const dx = e.touches[0].clientX - e.touches[1].clientX
-      const dy = e.touches[0].clientY - e.touches[1].clientY
-      lastPinchDist.current = Math.hypot(dx, dy)
-    }
-  }
-  function handleTouchMove(e) {
-    e.preventDefault()
-    if (e.touches.length === 1 && dragOrigin.current) {
-      setTransform(prev => ({
-        ...prev,
-        x: dragOrigin.current.tx + (e.touches[0].clientX - dragOrigin.current.mx),
-        y: dragOrigin.current.ty + (e.touches[0].clientY - dragOrigin.current.my),
-      }))
-    }
-    if (e.touches.length === 2 && lastPinchDist.current !== null) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX
-      const dy = e.touches[0].clientY - e.touches[1].clientY
-      const dist = Math.hypot(dx, dy)
-      const rect = containerRef.current?.getBoundingClientRect()
-      if (rect) {
+
+    function onTouchMove(e) {
+      e.preventDefault() // works because listener is { passive: false }
+      if (e.touches.length === 1 && dragOrigin.current) {
+        setTransform(prev => ({
+          ...prev,
+          x: dragOrigin.current.tx + (e.touches[0].clientX - dragOrigin.current.mx),
+          y: dragOrigin.current.ty + (e.touches[0].clientY - dragOrigin.current.my),
+        }))
+      }
+      if (e.touches.length === 2 && lastPinchDist.current !== null) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        const dist = Math.hypot(dx, dy)
+        const rect = el.getBoundingClientRect()
         const cx = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left
         const cy = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top
         zoomAt(cx, cy, (dist - lastPinchDist.current) * 0.007)
+        lastPinchDist.current = dist
       }
-      lastPinchDist.current = dist
     }
-  }
-  function handleTouchEnd() { dragOrigin.current = null; lastPinchDist.current = null }
+
+    function onTouchEnd() { dragOrigin.current = null; lastPinchDist.current = null }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    el.addEventListener('touchend',   onTouchEnd)
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove',  onTouchMove)
+      el.removeEventListener('touchend',   onTouchEnd)
+    }
+  }, [zoomAt])
 
   // Control buttons
   function zoomIn() {
@@ -176,10 +193,7 @@ export default function TreeCanvas({ children }) {
       onMouseMove={handleMouseMove}
       onMouseUp={stopDrag}
       onMouseLeave={stopDrag}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      style={{ cursor: dragging ? 'grabbing' : 'grab' }}
+      style={{ cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
     >
       {/* Transformed content */}
       <div
